@@ -4,9 +4,11 @@
 #include <cstdint>
 #include <cmath>
 #include <memory>
+#include <sstream>
 
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+#include <device_launch_parameters.h>
 
 struct rgb_t
 {

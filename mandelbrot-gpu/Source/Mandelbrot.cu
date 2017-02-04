@@ -1,5 +1,26 @@
 #include "Mandelbrot.hpp"
 
+#if _DEBUG
+#   define cudaCall(cuda_func, ...) { cudaError_t status = cuda_func(__VA_ARGS__); cudaAssert((status), __FILE__, #cuda_func, __LINE__); }
+#else
+#   define cudaCall(cuda_func, ...) { cudaError_t status = cuda_func(__VA_ARGS__); }
+#endif
+
+inline void cudaAssert(cudaError_t status, const char *file, const char* func, int line)
+{
+    if (status != cudaSuccess)
+    {
+        std::stringstream ss;
+        ss << "Error: " << cudaGetErrorString(status);
+        ss << "Func: " << func;
+        ss << "File: " << file;
+        ss << "Line: " << line;
+        ss << std::endl;
+
+        throw std::runtime_error(ss.str());
+    }
+}
+
 __constant__ rgb_t pixel_colour[16];
 
 __global__ void mandelbrot(rgb_t* img_data, const int width, const int height, const double scale, const int pixel_num)
@@ -7,15 +28,14 @@ __global__ void mandelbrot(rgb_t* img_data, const int width, const int height, c
     const std::uint8_t max_iter = 255;
     const double cx = -0.6, cy = 0.0;
 
-    const int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int idx = i * width + j;
 
     if (idx >= pixel_num)
     {
         return;
     }
-
-    int i = idx / width;
-    int j = idx % width;
 
     const double y = (i - height / 2) * scale + cy;
     const double x = (j - width / 2) * scale + cx;
@@ -62,98 +82,46 @@ std::shared_ptr<Device> Device::get_inst()
 
 float Device::create_image(std::vector<rgb_t>& img_data, const int width, const int height, const double scale)
 {
-    cudaError_t cudaStatus;
-
     rgb_t* d_img_data;
     int pixel_num = width * height;
     int img_size = pixel_num * sizeof(rgb_t);
 
     int pixel_block = 1024;
 
-    cudaStatus = cudaMalloc((void**)&d_img_data, img_size);
-
-    if (cudaStatus != cudaSuccess)
-    {
-        throw std::runtime_error("cudaMalloc failed!");
-    }
-
-    cudaStatus = cudaMemset(d_img_data, 0, img_size);
-
-    if (cudaStatus != cudaSuccess)
-    {
-        throw std::runtime_error("cudaMemset failed!");
-    }
+    cudaCall(cudaMalloc, (void**)&d_img_data, img_size);
+    cudaCall(cudaMemset, d_img_data, 0, img_size);
 
     cudaEvent_t start;
-
-    cudaStatus = cudaEventCreate(&start);
-
-    if (cudaStatus != cudaSuccess)
-    {
-        throw std::runtime_error("cudaEventCreate failed!");
-    }
+    cudaCall(cudaEventCreate, &start);
 
     cudaEvent_t stop;
+    cudaCall(cudaEventCreate, &stop);
 
-    cudaStatus = cudaEventCreate(&stop);
+    cudaCall(cudaEventRecord, start, 0);
 
-    if (cudaStatus != cudaSuccess)
-    {
-        throw std::runtime_error("cudaEventCreate failed!");
-    }
+    dim3 block(32, 32);
+    dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
 
-    cudaStatus = cudaEventRecord(start, 0);
+    mandelbrot<<< grid, block >>>(d_img_data, width, height, scale, pixel_num);
 
-    if (cudaStatus != cudaSuccess)
-    {
-        throw std::runtime_error("cudaEventRecord failed!");
-    }
-
-    mandelbrot<<< (pixel_num + pixel_block - 1) / pixel_block, pixel_block >>>(d_img_data, width, height, scale, pixel_num);
-
-    cudaStatus = cudaGetLastError();
-
-    if (cudaStatus != cudaSuccess) 
-    {
-        throw std::runtime_error("mandelbrot kernel failed!");
-    }
-
-    cudaStatus = cudaEventRecord(stop, 0);
+    cudaCall(cudaGetLastError);
+    cudaCall(cudaEventRecord, stop, 0);
+    cudaCall(cudaEventSynchronize, stop);
     
-    if (cudaStatus != cudaSuccess)
-    {
-        throw std::runtime_error("cudaEventRecord failed!");
-    }
-
-    cudaStatus = cudaEventSynchronize(stop);
-    
-    if (cudaStatus != cudaSuccess)
-    {
-        throw std::runtime_error("cudaEventSynchronize failed!");
-    }
-
     float elapsed_time;
-
-    cudaStatus = cudaEventElapsedTime(&elapsed_time, start, stop);
-
-    if (cudaStatus != cudaSuccess)
-    {
-        throw std::runtime_error("cudaEventElapsedTime failed!");
-    }
+    cudaCall(cudaEventElapsedTime, &elapsed_time, start, stop);
 
     img_data.resize(width * height);
 
-    cudaMemcpy(img_data.data(), d_img_data, img_size, cudaMemcpyDeviceToHost);
+    cudaCall(cudaMemcpy, img_data.data(), d_img_data, img_size, cudaMemcpyDeviceToHost);
 
-    cudaFree(d_img_data);
+    cudaCall(cudaFree, d_img_data);
 
     return elapsed_time;
 }
 
 Device::Device()
 {
-    cudaError_t cudaStatus;
-
     pixel_mapping =
     {
         {  66,  30,  15 }, {  25,   7,  26 }, {   9,   1,  47 }, {   4,   4,  73 },
@@ -162,10 +130,5 @@ Device::Device()
         { 255, 170,   0 }, { 204, 128,   0 }, { 153,  87,   0 }, { 106,  52,   3 }
     };
 
-    cudaStatus = cudaMemcpyToSymbol(pixel_colour, pixel_mapping.data(), pixel_mapping.size() * sizeof(rgb_t));
-
-    if (cudaStatus != cudaSuccess) 
-    {
-        throw std::runtime_error("cudaMemcpyToSymbol failed!");
-    }
+    cudaCall(cudaMemcpyToSymbol, pixel_colour, pixel_mapping.data(), pixel_mapping.size() * sizeof(rgb_t));
 }
