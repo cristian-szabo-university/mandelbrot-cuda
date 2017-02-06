@@ -43,14 +43,13 @@ int Program::run()
     const int height = std::stoi(args["--height"].asString());
     const int checks = std::stoi(args["--validate_time"].asString());
     std::string ppm_file = args["<ppm_file>"].asString();
-    const double scale = 1.0 / (width / 4.0);
 
     std::vector<rgb_t> img_data;
-    float min_exec_time = std::numeric_limits<float>::max();
+    std::uint64_t min_exec_time = std::numeric_limits<std::uint64_t>::max();
 
     for (int i = 0; i< checks; i++)
     {
-        float elapsed_time = create_image(img_data, width, height, scale);
+        std::uint64_t elapsed_time = create_image(img_data, width, height);
 
         if (min_exec_time > elapsed_time)
         {
@@ -63,55 +62,90 @@ int Program::run()
         throw std::runtime_error("Failed to save the ppm file!");
     }
 
-    std::cout << "Generate time: " << min_exec_time / 1000.0 << " seconds." << std::endl;
+    std::cout << "Generate time: " << min_exec_time << " ms." << std::endl;
 
     return 0;
 }
 
-float Program::create_image(std::vector<rgb_t>& img_data, const int width, const int height, const double scale)
+#ifdef ENABLE_SSE_INTRINSICS
+std::uint64_t Program::create_image(std::vector<rgb_t>& img_data, std::int32_t width, std::int32_t height)
 {
     using namespace std::chrono;
 
-    const double cx = -0.6, cy = 0.0;
-    const std::uint8_t max_iter = std::numeric_limits<std::uint8_t>::max();
+    const float cx = -0.6f, cy = 0.0f;
+    const float scale = 1.0f / (width / 4.0f);
+    const std::int32_t half_width = width >> 1;
+    const std::int32_t half_height = height >> 1;
+    const std::uint8_t iter_max = std::numeric_limits<std::uint8_t>::max();
 
     img_data.resize(width * height, { 0, 0, 0 });
 
     auto start_time = high_resolution_clock::now();
 
-    for (int i = 0; i < height; i++)
+#ifdef ENABLE_PARALLEL_MODE
+    #pragma omp parallel for
+#endif
+    for (std::int32_t i = 0; i < height; i++)
     {
-        const double y = (i - height / 2) * scale + cy;
+        __m128 my = _mm_set1_ps((float)(i - half_height) * scale + cy);
+        const std::int32_t row = i * width;
 
-        for (int j = 0; j < width; j++)
+        for (std::int32_t j = 0; j < width; j += 4)
         {
-            const double x = (j - width / 2) * scale + cx;
+            __m128 mx = _mm_setr_ps((float)j, (float)(j + 1), (float)(j + 2), (float)(j + 3));
+            __m128 vectorhxres = _mm_set1_ps((float)half_width);
+            __m128 vectortemp1 = _mm_set1_ps(scale);
+            __m128 vectortemp2 = _mm_set1_ps(cx);
 
-            double zx, zy, zx2, zy2;
-            std::uint8_t iter = 0;
+            mx = _mm_sub_ps(mx, vectorhxres);
+            mx = _mm_mul_ps(mx, vectortemp1);
+            mx = _mm_add_ps(mx, vectortemp2);
 
-            zx = hypot(x - 0.25, y);
-            if (x < zx - 2 * zx * zx + 0.25) iter = max_iter;
-            if ((x + 1)*(x + 1) + y * y < 0.0625) iter = max_iter;
+            __m128 temp;
+            __m128 iter_values;
+            __m128 x = _mm_set1_ps(0.0);
+            __m128 y = _mm_set1_ps(0.0);
+            __m128 iters = _mm_set1_ps(0.0);            
+            __m128 mask = _mm_set1_ps(1.0);
+            
+            int iter_count = 0;
 
-            // f(z) = z^2 + c
-            //
-            // z = x + i * y;
-            // z^2 = x^2 - y^2 + i * 2xy
-            // c = x0 + i * y0;
-            zx = zy = zx2 = zy2 = 0.0;
-            do {
-                zy = 2.0 * zx * zy + y; // y = Img(z^2 + c) = 2xy + y0;
-                zx = zx2 - zy2 + x; // x = Re(z^2 + c) = x^2 - y^2 + x0;
-                zx2 = zx * zx;
-                zy2 = zy * zy;
-            } while (iter++ < max_iter && zx2 + zy2 < 4.0);
-
-            if (iter < max_iter && iter > 0)
+            while (
+                (_mm_movemask_ps(
+                    iter_values = (
+                        _mm_cmplt_ps(
+                            _mm_add_ps(_mm_mul_ps(x, x), _mm_mul_ps(y, y)),
+                            _mm_set1_ps(4.0)
+                        )
+                        ))
+                    ) != 0
+                &&
+                iter_count < iter_max)
             {
-                const std::uint8_t px_idx = iter % 16;
+                iters = _mm_add_ps(iters, _mm_and_ps(iter_values, mask));
 
-                img_data[i * width + j] = pixel_colour[px_idx];
+                // temp =  x^2 - y^2 + cx
+                temp = _mm_add_ps(_mm_sub_ps(_mm_mul_ps(x, x), _mm_mul_ps(y, y)), mx);
+                
+                // y = 2*x*y + cy
+                y = _mm_add_ps(_mm_mul_ps(_mm_mul_ps(x, y), _mm_set1_ps(2.0)), my);
+
+                x = temp;
+
+                iter_count++;
+            }
+
+            float pixel_iters[4];
+            _mm_store_ps(pixel_iters, iters);
+
+            for (int i = 0; i < 4; i++)
+            {
+                if (pixel_iters[i] != iter_max)
+                {
+                    int idx = ((int)pixel_iters[i] % 16);
+
+                    img_data[row + j + i] = pixel_colour[idx];
+                }
             }
         }
     }
@@ -121,6 +155,70 @@ float Program::create_image(std::vector<rgb_t>& img_data, const int width, const
 
     return elapsed_time.count();
 }
+#else
+std::uint64_t Program::create_image(std::vector<rgb_t>& img_data, std::int32_t width, std::int32_t height)
+{
+    using namespace std::chrono;
+
+    const float cx = -0.6, cy = 0.0;
+    const float scale = 1.0 / (width / 4.0);
+    const std::int32_t half_width = width >> 1;
+    const std::int32_t half_height = height >> 1;
+    const std::uint8_t iter_max = std::numeric_limits<std::uint8_t>::max();
+
+    img_data.resize(width * height, { 0, 0, 0 });
+
+    auto start_time = high_resolution_clock::now();
+
+#ifdef ENABLE_PARALLEL_MODE
+    #pragma omp parallel for
+#endif
+    for (std::int32_t i = 0; i < height; i++)
+    {
+        const float y = (i - half_height) * scale + cy;
+        const std::int32_t row = i * width;
+
+        for (std::int32_t j = 0; j < width; j++)
+        {
+            const float x = (j - half_width) * scale + cx;
+
+            float zx, zy, zx2, zy2;
+            std::uint8_t iter = 0;
+
+            zx = hypot(x - 0.25, y);
+
+            if (x < zx - 2 * zx * zx + 0.25) continue;
+            if ((x + 1)*(x + 1) + y * y < 0.0625) continue;
+
+            // f(z) = z^2 + c
+            //
+            // z = x + i * y;
+            // z^2 = x^2 - y^2 + i * 2xy
+            // c = x0 + i * y0;
+            zx = zy = zx2 = zy2 = 0.0;
+            do 
+            {
+                zy = 2.0 * zx * zy + y; // y = Img(z^2 + c) = 2xy + y0;
+                zx = zx2 - zy2 + x; // x = Re(z^2 + c) = x^2 - y^2 + x0;
+                zx2 = zx * zx;
+                zy2 = zy * zy;
+            } while (iter++ < iter_max && zx2 + zy2 < 4.0);
+
+            if (iter > 0 && iter < iter_max)
+            {
+                const std::uint8_t px_idx = iter % 16;
+
+                img_data[row + j] = pixel_colour[px_idx];
+            }
+        }
+    }
+
+    auto end_time = high_resolution_clock::now();
+    auto elapsed_time = duration_cast<milliseconds>(end_time - start_time);
+
+    return elapsed_time.count();
+}
+#endif
 
 bool Program::save_ppm_file(const std::string& file_name, std::vector<rgb_t> img_data, int width, int height)
 {

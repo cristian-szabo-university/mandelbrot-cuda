@@ -8,6 +8,8 @@
 
 #include "docopt.h"
 
+#include "Config.hpp"
+
 struct rgb_t
 {
     std::uint8_t r, g, b;
@@ -29,7 +31,7 @@ private:
 
     std::vector<rgb_t> pixel_colour;
 
-    float create_image(std::vector<rgb_t>& img_data, const int width, const int height, const double scale);
+    std::uint64_t create_image(std::vector<rgb_t>& img_data, std::int32_t width, std::int32_t height);
 
     bool save_ppm_file(const std::string& file_name, std::vector<rgb_t> img_data, int width, int height);
 
