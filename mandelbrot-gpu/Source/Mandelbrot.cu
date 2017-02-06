@@ -37,15 +37,21 @@ __global__ void mandelbrot(rgb_t* img_data, const int width, const int height, c
         return;
     }
 
-    const double y = (i - height / 2) * scale + cy;
-    const double x = (j - width / 2) * scale + cx;
+    const double y = (i - (height >> 1)) * scale + cy;
+    const double x = (j - (width >> 1)) * scale + cx;
 
     double zx, zy, zx2, zy2;
     std::uint8_t iter = 0;
 
     zx = hypot(x - 0.25, y);
-    if (x < zx - 2.0 * zx * zx + 0.25) iter = max_iter;
-    if ((x + 1)*(x + 1) + y * y < 0.0625) iter = max_iter;
+    if (x < zx - 2.0 * zx * zx + 0.25)
+    {
+        iter = max_iter;
+    }
+    if ((x + 1)*(x + 1) + y * y < 0.0625)
+    {
+        iter = max_iter;
+    }
 
     // f(z) = z^2 + c
     //
@@ -59,8 +65,8 @@ __global__ void mandelbrot(rgb_t* img_data, const int width, const int height, c
         zx2 = zx * zx;
         zy2 = zy * zy;
     } while (iter++ < max_iter && zx2 + zy2 < 4.0);
-
-    if (iter < max_iter && iter > 0)
+ 
+    if (iter > 0 && iter < max_iter )
     {
         const std::uint8_t px_idx = iter % 16;
 
@@ -68,25 +74,23 @@ __global__ void mandelbrot(rgb_t* img_data, const int width, const int height, c
     }
 }
 
-std::shared_ptr<Device> Device::inst = std::shared_ptr<Device>();
+std::shared_ptr<Mandelbrot> Mandelbrot::inst = std::shared_ptr<Mandelbrot>();
 
-std::shared_ptr<Device> Device::get_inst()
+std::shared_ptr<Mandelbrot> Mandelbrot::get_inst()
 {
     if (!inst)
     {
-        inst = std::shared_ptr<Device>(new Device());
+        inst = std::shared_ptr<Mandelbrot>(new Mandelbrot());
     }
 
     return inst;
 }
 
-float Device::create_image(std::vector<rgb_t>& img_data, const int width, const int height, const double scale)
+float Mandelbrot::create_image(std::vector<rgb_t>& img_data, int width, int height, double scale)
 {
     rgb_t* d_img_data;
     int pixel_num = width * height;
     int img_size = pixel_num * sizeof(rgb_t);
-
-    int pixel_block = 1024;
 
     cudaCall(cudaMalloc, (void**)&d_img_data, img_size);
     cudaCall(cudaMemset, d_img_data, 0, img_size);
@@ -120,9 +124,9 @@ float Device::create_image(std::vector<rgb_t>& img_data, const int width, const 
     return elapsed_time;
 }
 
-Device::Device()
+Mandelbrot::Mandelbrot()
 {
-    pixel_mapping =
+    std::vector<rgb_t> pixel_mapping =
     {
         {  66,  30,  15 }, {  25,   7,  26 }, {   9,   1,  47 }, {   4,   4,  73 },
         {   0,   7, 100 }, {  12,  44, 138 }, {  24,  82, 177 }, {  57, 125, 209 },

@@ -15,21 +15,19 @@ struct rgb_t
     std::uint8_t r, g, b;
 };
 
-class Device
+class Mandelbrot
 {
 public:
 
-    static std::shared_ptr<Device> get_inst();
+    static std::shared_ptr<Mandelbrot> get_inst();
 
-    float create_image(std::vector<rgb_t>& img_data, const int width, const int height, const double scale);
+    float create_image(std::vector<rgb_t>& img_data, int width, int height, double scale);
 
 private:
 
-    static std::shared_ptr<Device> inst;
+    static std::shared_ptr<Mandelbrot> inst;
 
-    std::vector<rgb_t> pixel_mapping;
-
-    Device();
+    Mandelbrot();
 
 };
 

@@ -37,13 +37,13 @@ int Program::run()
     std::string ppm_file = args["<ppm_file>"].asString();
     const double scale = 1. / (width / 4);
 
-    std::shared_ptr<Device> device = Device::get_inst();
+    std::shared_ptr<Mandelbrot> service = Mandelbrot::get_inst();
     std::vector<rgb_t> img_data;
     float min_exec_time = std::numeric_limits<float>::max();
 
     for (int i = 0; i< checks; i++)
     {
-        float elapsed_time = device->create_image(img_data, width, height, scale);
+        float elapsed_time = service->create_image(img_data, width, height, scale);
 
         if (min_exec_time > elapsed_time)
         {
