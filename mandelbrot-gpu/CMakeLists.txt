@@ -1,5 +1,8 @@
 project (MandelbrotGPU VERSION 1.0.0)
 
+# Enable full optimisation
+set(CMAKE_C_FLAGS_RELEASE "-O3 -use_fast_math")
+
 find_package(CUDA REQUIRED)
 
 # https://gitlab.kitware.com/cmake/cmake/issues/16602
