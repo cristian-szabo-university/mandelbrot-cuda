@@ -46,11 +46,11 @@ __global__ void mandelbrot(rgb_t* img_data, const int width, const int height, c
     zx = hypot(x - 0.25, y);
     if (x < zx - 2.0 * zx * zx + 0.25)
     {
-        iter = max_iter;
+        return;
     }
     if ((x + 1)*(x + 1) + y * y < 0.0625)
     {
-        iter = max_iter;
+        return;
     }
 
     // f(z) = z^2 + c
