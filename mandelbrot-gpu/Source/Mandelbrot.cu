@@ -68,13 +68,14 @@ __global__ void mandelbrot(const kernel_t info_data, rgb_t* img_data)
 
     std::uint8_t iter = 0;
     zx = zy = zx2 = zy2 = 0.0f;
+
     do {
         zy = 2.0f * zx * zy + y;
         zx = zx2 - zy2 + x;
         zx2 = zx * zx;
         zy2 = zy * zy;
     } while (iter++ < max_iter && zx2 + zy2 < 4.0f);
- 
+
     if (iter > 0 && iter < max_iter )
     {
         img_data[i * info_data.width + j] = pixel_colour[iter % 16];

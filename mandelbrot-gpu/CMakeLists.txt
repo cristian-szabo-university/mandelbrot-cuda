@@ -1,8 +1,9 @@
 project (MandelbrotGPU VERSION 1.0.0)
 
 # Enable full optimisation
-set(CMAKE_C_FLAGS "-Wno-deprecated-gpu-targets")
-set(CMAKE_C_FLAGS_RELEASE "-O3 -use_fast_math")
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-Wno-deprecated-gpu-targets;-lineinfo")
+set(CUDA_NVCC_FLAGS_DEBUG "${CUDA_NVCC_FLAGS_DEBUG};-Xptxas -v")
+set(CUDA_NVCC_FLAGS_RELEASE "${CUDA_NVCC_FLAGS_RELEASE};-O3")
 
 find_package(CUDA REQUIRED)
 
