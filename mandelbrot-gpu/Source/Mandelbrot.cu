@@ -11,11 +11,10 @@ inline void cudaAssert(cudaError_t status, const char *file, const char* func, i
     if (status != cudaSuccess)
     {
         std::stringstream ss;
-        ss << "Error: " << cudaGetErrorString(status);
-        ss << "Func: " << func;
-        ss << "File: " << file;
-        ss << "Line: " << line;
-        ss << std::endl;
+        ss << "Error: " << cudaGetErrorString(status) << std::endl;
+        ss << "Func: " << func << std::endl;
+        ss << "File: " << file << std::endl;
+        ss << "Line: " << line << std::endl;
 
         throw std::runtime_error(ss.str());
     }
