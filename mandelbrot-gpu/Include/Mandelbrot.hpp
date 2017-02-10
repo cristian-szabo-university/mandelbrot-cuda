@@ -9,6 +9,7 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <device_launch_parameters.h>
+#include <cuda_occupancy.h>
 
 struct rgb_t
 {

@@ -102,8 +102,14 @@ float Mandelbrot::create_image(std::vector<rgb_t>& img_data, int width, int heig
 
     cudaCall(cudaEventRecord, start, 0);
 
-    dim3 block(32, 32);
+    int blockSize, minGridSize;
+    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, mandelbrot, 0, 0);
+    blockSize = pow(2, floor(log(sqrt(blockSize)) / log(2)));
+
+    dim3 block(blockSize, blockSize);
     dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+    grid.x = grid.x > minGridSize ? grid.x : minGridSize;
+    grid.y = grid.y > minGridSize ? grid.y : minGridSize;
 
     mandelbrot<<< grid, block >>>(d_img_data, width, height, scale, pixel_num);
 
