@@ -6,10 +6,8 @@
 #include <memory>
 #include <sstream>
 
-#include <cuda.h>
-#include <cuda_runtime_api.h>
-#include <device_launch_parameters.h>
 #include <cuda_occupancy.h>
+#include <cuda_runtime.h>
 
 struct rgb_t
 {
@@ -22,7 +20,7 @@ public:
 
     static std::shared_ptr<Mandelbrot> get_inst();
 
-    float create_image(std::vector<rgb_t>& img_data, int width, int height, double scale);
+    float create_image(std::vector<rgb_t>& img_data, int width, int height);
 
 private:
 

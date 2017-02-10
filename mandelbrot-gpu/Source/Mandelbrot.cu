@@ -20,56 +20,64 @@ inline void cudaAssert(cudaError_t status, const char *file, const char* func, i
     }
 }
 
-__constant__ rgb_t pixel_colour[16];
-
-__global__ void mandelbrot(rgb_t* img_data, const int width, const int height, const double scale, const int pixel_num)
+struct kernel_t
 {
-    const std::uint8_t max_iter = 255;
-    const double cx = -0.6, cy = 0.0;
+    int width, height;
+    int half_width, half_height;
+    float scale;
 
+    kernel_t(const int width, const int height) : width(width), height(height)
+    {
+        half_width = width >> 1;
+        half_height = height >> 1;
+        scale = 1.0f / (width / 4.0f);
+    }
+};
+
+__constant__ rgb_t pixel_colour[16] = 
+{
+    { 66,  30,  15 },{ 25,   7,  26 },{ 9,   1,  47 },{ 4,   4,  73 },
+    { 0,   7, 100 },{ 12,  44, 138 },{ 24,  82, 177 },{ 57, 125, 209 },
+    { 134, 181, 229 },{ 211, 236, 248 },{ 241, 233, 191 },{ 248, 201,  95 },
+    { 255, 170,   0 },{ 204, 128,   0 },{ 153,  87,   0 },{ 106,  52,   3 }
+};
+
+__global__ void mandelbrot(const kernel_t info_data, rgb_t* img_data)
+{
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
-    const int idx = i * width + j;
 
-    if (idx >= pixel_num)
+    if (i >= info_data.width || j >= info_data.height)
     {
         return;
     }
 
-    const double y = (i - (height >> 1)) * scale + cy;
-    const double x = (j - (width >> 1)) * scale + cx;
+    const std::uint8_t max_iter = 255;
+    const float cx = -0.6f, cy = 0.0f;
+    const float y = (i - info_data.half_width) * info_data.scale + cy;
+    const float x = (j - info_data.half_height) * info_data.scale + cx;
 
-    double zx, zy, zx2, zy2;
+    float zx, zy, zx2, zy2;
+    
+    zx = hypot(x - 0.25f, y);
+
+    if (x < zx - 2.0f * zx * zx + 0.25f || (x + 1) * (x + 1) + y * y < 0.0625f)
+    {
+        return;
+    }
+
     std::uint8_t iter = 0;
-
-    zx = hypot(x - 0.25, y);
-    if (x < zx - 2.0 * zx * zx + 0.25)
-    {
-        return;
-    }
-    if ((x + 1)*(x + 1) + y * y < 0.0625)
-    {
-        return;
-    }
-
-    // f(z) = z^2 + c
-    //
-    // z = x + i * y;
-    // z^2 = x^2 - y^2 + i * 2xy
-    // c = x0 + i * y0;
-    zx = zy = zx2 = zy2 = 0;
+    zx = zy = zx2 = zy2 = 0.0f;
     do {
-        zy = 2.0 * zx * zy + y; // y = Img(z^2 + c) = 2xy + y0;
-        zx = zx2 - zy2 + x; // x = Re(z^2 + c) = x^2 - y^2 + x0;
+        zy = 2.0f * zx * zy + y;
+        zx = zx2 - zy2 + x;
         zx2 = zx * zx;
         zy2 = zy * zy;
-    } while (iter++ < max_iter && zx2 + zy2 < 4.0);
+    } while (iter++ < max_iter && zx2 + zy2 < 4.0f);
  
     if (iter > 0 && iter < max_iter )
     {
-        const std::uint8_t px_idx = iter % 16;
-
-        img_data[idx] = pixel_colour[px_idx];
+        img_data[i * info_data.width + j] = pixel_colour[iter % 16];
     }
 }
 
@@ -85,11 +93,10 @@ std::shared_ptr<Mandelbrot> Mandelbrot::get_inst()
     return inst;
 }
 
-float Mandelbrot::create_image(std::vector<rgb_t>& img_data, int width, int height, double scale)
+float Mandelbrot::create_image(std::vector<rgb_t>& img_data, int width, int height)
 {
     rgb_t* d_img_data;
-    int pixel_num = width * height;
-    int img_size = pixel_num * sizeof(rgb_t);
+    const int img_size = width * height * sizeof(rgb_t);
 
     cudaCall(cudaMalloc, (void**)&d_img_data, img_size);
     cudaCall(cudaMemset, d_img_data, 0, img_size);
@@ -100,7 +107,7 @@ float Mandelbrot::create_image(std::vector<rgb_t>& img_data, int width, int heig
     cudaEvent_t stop;
     cudaCall(cudaEventCreate, &stop);
 
-    cudaCall(cudaEventRecord, start, 0);
+    kernel_t info_data(width, height);
 
     int blockSize, minGridSize;
     cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, mandelbrot, 0, 0);
@@ -111,7 +118,9 @@ float Mandelbrot::create_image(std::vector<rgb_t>& img_data, int width, int heig
     grid.x = grid.x > minGridSize ? grid.x : minGridSize;
     grid.y = grid.y > minGridSize ? grid.y : minGridSize;
 
-    mandelbrot<<< grid, block >>>(d_img_data, width, height, scale, pixel_num);
+    cudaCall(cudaEventRecord, start, 0);
+
+    mandelbrot<<< grid, block >>>(info_data, d_img_data);
 
     cudaCall(cudaGetLastError);
     cudaCall(cudaEventRecord, stop, 0);
@@ -133,13 +142,4 @@ float Mandelbrot::create_image(std::vector<rgb_t>& img_data, int width, int heig
 
 Mandelbrot::Mandelbrot()
 {
-    std::vector<rgb_t> pixel_mapping =
-    {
-        {  66,  30,  15 }, {  25,   7,  26 }, {   9,   1,  47 }, {   4,   4,  73 },
-        {   0,   7, 100 }, {  12,  44, 138 }, {  24,  82, 177 }, {  57, 125, 209 },
-        { 134, 181, 229 }, { 211, 236, 248 }, { 241, 233, 191 }, { 248, 201,  95 },
-        { 255, 170,   0 }, { 204, 128,   0 }, { 153,  87,   0 }, { 106,  52,   3 }
-    };
-
-    cudaCall(cudaMemcpyToSymbol, pixel_colour, pixel_mapping.data(), pixel_mapping.size() * sizeof(rgb_t));
 }
