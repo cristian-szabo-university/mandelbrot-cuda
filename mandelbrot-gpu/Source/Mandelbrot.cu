@@ -119,6 +119,8 @@ float Mandelbrot::create_image(std::vector<rgb_t>& img_data, int width, int heig
     cudaCall(cudaMemcpy, img_data.data(), d_img_data, img_size, cudaMemcpyDeviceToHost);
 
     cudaCall(cudaFree, d_img_data);
+    cudaCall(cudaEventDestroy, start);
+    cudaCall(cudaEventDestroy, stop);
 
     return elapsed_time;
 }
