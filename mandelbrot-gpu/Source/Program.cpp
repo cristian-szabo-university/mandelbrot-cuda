@@ -34,8 +34,7 @@ int Program::run()
     const int width = std::stoi(args["--width"].asString());
     const int height = std::stoi(args["--height"].asString());
     const int checks = std::stoi(args["--validate_time"].asString());
-    std::string ppm_file = args["<ppm_file>"].asString();
-    const double scale = 1. / (width / 4);
+    std::string ppm_file = args["<ppm_file>"].asString();   
 
     std::shared_ptr<Mandelbrot> service = Mandelbrot::get_inst();
     std::vector<rgb_t> img_data;
@@ -43,7 +42,7 @@ int Program::run()
 
     for (int i = 0; i< checks; i++)
     {
-        float elapsed_time = service->create_image(img_data, width, height, scale);
+        float elapsed_time = service->create_image(img_data, width, height);
 
         if (min_exec_time > elapsed_time)
         {
@@ -56,7 +55,7 @@ int Program::run()
         throw std::runtime_error("Failed to save the ppm file!");
     }
 
-    std::cout << "Generate time: " << min_exec_time / 1000.0 << " seconds." << std::endl;
+    std::cout << "Generate time: " << min_exec_time << " ms." << std::endl;
 
     return 0;
 }
