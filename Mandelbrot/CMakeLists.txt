@@ -1,4 +1,4 @@
-project (MandelbrotGPU VERSION 1.0.0)
+project (Mandelbrot VERSION 1.0.0)
 
 # Enable full optimisation
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-Wno-deprecated-gpu-targets;-lineinfo")
@@ -10,7 +10,7 @@ find_package(CUDA REQUIRED)
 # https://gitlab.kitware.com/cmake/cmake/issues/16602
 set (CUDA_LIBRARIES PUBLIC ${CUDA_LIBRARIES})
 
-cuda_include_directories("${CMAKE_CURRENT_SOURCE_DIR}/Include")
+cuda_include_directories ("${CMAKE_CURRENT_SOURCE_DIR}/Include")
 
 file (GLOB HEADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Include/*.hpp")
 file (GLOB SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cu")
@@ -22,6 +22,14 @@ cuda_add_executable (${PROJECT_NAME} ${HEADER_FILES} ${SOURCE_FILES})
 
 add_dependencies (${PROJECT_NAME} Docopt)
 
+if (MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE "/arch:SSE2")
+    target_compile_options(${PROJECT_NAME} PRIVATE "/openmp")
+else ()
+    target_compile_options(${PROJECT_NAME} PRIVATE "-msse2")
+    target_compile_options(${PROJECT_NAME} PRIVATE "-fopenmp")
+endif ()
+        
 set_property (TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 11)
 
 target_include_directories (${PROJECT_NAME} PUBLIC  

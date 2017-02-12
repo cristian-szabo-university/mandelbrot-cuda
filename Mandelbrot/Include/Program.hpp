@@ -7,7 +7,7 @@
 #include <chrono>
 
 #include "docopt.h"
-#include "Mandelbrot.hpp"
+#include "Image.hpp"
 
 class Program
 {
@@ -23,6 +23,10 @@ private:
 
     std::map<std::string, docopt::value> args;
 
-    bool save_ppm_file(const std::string& file_name, std::vector<rgb_t> img_data, int width, int height);
+    Image pixel_colour;
+
+    std::uint64_t generate_mandelbrot(Image& image, double cx, double cy);
+
+    std::uint64_t generate_mandelbrot_optimised(Image& image, double cx, double cy);
 
 };

@@ -6,7 +6,7 @@ cmake_minimum_required (VERSION 3.2)
 #
 ###############################################################################
 
-project (Mandelbrot VERSION 1.0.0)
+project (Coursework VERSION 1.0.0)
 
 if (${PROJECT_SOURCE_DIR} STREQUAL ${PROJECT_BINARY_DIR})
 	message(FATAL_ERROR "In-tree builds are not supported; please run cmake in a separate build directory.")
@@ -66,8 +66,7 @@ set_target_properties (docopt PROPERTIES
 #
 ###############################################################################
 
-add_subdirectory ("${CMAKE_SOURCE_DIR}/mandelbrot-cpu")
-add_subdirectory ("${CMAKE_SOURCE_DIR}/mandelbrot-gpu")
+add_subdirectory ("${CMAKE_SOURCE_DIR}/Mandelbrot")
 
 ###############################################################################
 #
