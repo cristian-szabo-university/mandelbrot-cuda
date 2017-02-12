@@ -8,7 +8,7 @@ Program::Program(std::vector<std::string> cli)
     Usage:
         mandelbrot generate (gpu|cpu) (<ppm_file>) [<width> <height> --fast]
         mandelbrot compare (<first_file> <second_file>)
-        mandelbrot benchmark (gpu|cpu) [<width> <height>]
+        mandelbrot benchmark (gpu|cpu) [<width> <height> --fast]
         mandelbrot (-h | --help)
         mandelbrot --version
 
@@ -109,7 +109,14 @@ int Program::run()
 
             if (args["cpu"].asBool())
             {
-                elapsed_time = generate_mandelbrot(result, cx, cy);
+                if (args["--fast"].asBool())
+                {
+                    elapsed_time = generate_mandelbrot_optimised(result, cx, cy);
+                }
+                else
+                {
+                    elapsed_time = generate_mandelbrot(result, cx, cy);
+                }
             }
             else if (args["gpu"].asBool())
             {
