@@ -172,11 +172,11 @@ std::uint64_t Program::generate_mandelbrot(Image& image, double cx, double cy)
             zx = zy = zx2 = zy2 = 0;
 
             do {
-                zy = 2 * zx * zy + y;
+                zy = 2.0 * zx * zy + y;
                 zx = zx2 - zy2 + x;
                 zx2 = zx * zx;
                 zy2 = zy * zy;
-            } while (iter++ < iter_max && zx2 + zy2 < 4);
+            } while (iter++ < iter_max && zx2 + zy2 < 4.0);
 
             *pixel = { iter };
         }

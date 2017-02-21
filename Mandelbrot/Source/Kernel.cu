@@ -29,9 +29,9 @@ __constant__ Image::pixel_t pixel_colour[16] =
 };
 
 __global__ void mandelbrot_kernel(Image::pixel_t* image, const int width, const int height, const double scale, const double cx, const double cy)
-{
-    const int j = threadIdx.x + blockIdx.x * blockDim.x;
+{    
     const int i = threadIdx.y + blockIdx.y * blockDim.y;
+    const int j = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (i >= height || j >= width)
     {
@@ -42,16 +42,15 @@ __global__ void mandelbrot_kernel(Image::pixel_t* image, const int width, const 
     const double y = (i - (height >> 1)) * scale + cy;
     const double x = (j - (width >> 1)) * scale + cx;
 
-    double zx, zy, zx2, zy2;
-    
-    zx = hypot(x - 0.25, y);
+    double zx = hypot(x - 0.25, y);
 
-    if (x < zx - 2.0 * zx * zx + 0.25 || (x + 1) * (x + 1) + y * y < 0.0625)
+    if (x < zx - 2.0 * zx * zx + 0.25 || (x + 1.0) * (x + 1.0) + y * y < 0.0625)
     {
         return;
     }
 
     std::uint8_t iter = 0;
+    double zy, zx2, zy2;
     zx = zy = zx2 = zy2 = 0.0;
 
     do {
