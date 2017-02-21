@@ -72,26 +72,75 @@ __global__ void mandelbrot(Image::pixel_t* image, const int width, const int hei
 namespace cuda
 {
     template<class T, typename... A>
-    float launch_kernel(T kernel, dim3 work, A&&... args)
+    float launch_kernel(T& kernel, dim3 work, A&&... args)
     {
+        int device;
+        cudaDeviceProp props;
+        cudaGetDevice(&device);
+        cudaGetDeviceProperties(&props, device);
+
+        int threadBlocks;
+        if (props.major == 2)
+        {
+            threadBlocks = 8;
+        }
+        else if (props.major == 3)
+        {
+            threadBlocks = 16;
+        }
+        else
+        {
+            threadBlocks = 32;
+        }
+
+        int blockSize;
+        std::uint32_t minGridSize;
+        cudaOccupancyMaxPotentialBlockSize((int*)&minGridSize, &blockSize, kernel, 0, 0);
+
+        int maxActiveBlocks = 0;
+        do
+        {
+            cudaOccupancyMaxActiveBlocksPerMultiprocessor(&maxActiveBlocks, kernel, blockSize, 0);
+
+            if (blockSize < props.warpSize || maxActiveBlocks >= threadBlocks)
+            {
+                break;
+            }
+
+            blockSize -= props.warpSize;            
+        } 
+        while (true);
+
+        int blockSizeDimX, blockSizeDimY;
+        blockSizeDimX = blockSizeDimY = (int)pow(2, ceil(log(sqrt(blockSize)) / log(2)));
+
+        while (blockSizeDimX * blockSizeDimY > blockSize)
+        {
+            blockSizeDimY--;
+        }
+
+        dim3 block(blockSizeDimX, blockSizeDimY);
+        dim3 grid((work.x + block.x - 1) / block.x, (work.y + block.y - 1) / block.y);
+        grid.x = grid.x > minGridSize ? grid.x : minGridSize;
+        grid.y = grid.y > minGridSize ? grid.y : minGridSize;
+
+#ifdef _DEBUG
+        float occupancy = (maxActiveBlocks * blockSize / props.warpSize) / (float)(props.maxThreadsPerMultiProcessor / props.warpSize);
+
+        std::cout << "Grid of size " << grid.x * grid.y << std::endl;
+        std::cout << "Launched blocks of size " << blockSize << std::endl;
+        std::cout << "Theoretical occupancy " << occupancy * 100.0f << "%" << std::endl;
+#endif
+
         cudaEvent_t start;
         cudaCall(cudaEventCreate, &start);
 
         cudaEvent_t stop;
         cudaCall(cudaEventCreate, &stop);
 
-        int blockSize, minGridSize;
-        cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, mandelbrot, 0, 0);
-        blockSize = (int)pow(2, floor(log(sqrt(blockSize)) / log(2)));
-
-        dim3 block(blockSize, blockSize);
-        dim3 grid((work.x + block.x - 1) / block.x, (work.y + block.y - 1) / block.y);
-        grid.x = grid.x > minGridSize ? grid.x : minGridSize;
-        grid.y = grid.y > minGridSize ? grid.y : minGridSize;
-
         cudaCall(cudaEventRecord, start, 0);
 
-        kernel << < grid, block >> >(std::forward<A>(args)...);
+        kernel<<< grid, block >>>(std::forward<A>(args)...);
 
         cudaCall(cudaGetLastError);
         cudaCall(cudaEventRecord, stop, 0);
@@ -102,6 +151,8 @@ namespace cuda
 
         cudaCall(cudaEventDestroy, start);
         cudaCall(cudaEventDestroy, stop);
+
+        cudaProfilerStop();
 
         return elapsed_time;
     }

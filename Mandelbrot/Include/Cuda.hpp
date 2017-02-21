@@ -5,9 +5,12 @@
 #include <cmath>
 #include <memory>
 #include <sstream>
+#include <iostream>
+#include <numeric>
 
-#include <cuda_occupancy.h>
-#include <cuda_runtime.h>
+#include "cuda_occupancy.h"
+#include "cuda_runtime.h"
+#include "cuda_profiler_api.h"
 
 #include "Image.hpp"
 
