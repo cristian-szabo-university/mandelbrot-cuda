@@ -23,7 +23,12 @@ std::ostream& operator<<(std::ostream& output, const Image& image)
         << image.height << std::endl
         << 255 << std::endl;
 
-    output.write((char*)&image.data[0], image.data.size() * sizeof(Image::pixel_t));
+    std::size_t row_size = image.width * sizeof(Image::pixel_t);
+
+    for (int i = image.height - 1; i >= 0; i--)
+    {
+        output.write((char*)&image.data[i * image.width], row_size);
+    }
 
     return output;
 }
@@ -44,7 +49,7 @@ std::istream& operator>>(std::istream& input, Image& image)
 
     image.data.resize(image.width * image.height);
 
-    input.read((char*)image.data.data(), image.data.size() * sizeof(Image::pixel_t));
+    input.read((char*)&image.data[0], image.data.size() * sizeof(Image::pixel_t));
 
     return input;
 }
