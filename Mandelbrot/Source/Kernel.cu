@@ -28,19 +28,19 @@ __constant__ Image::pixel_t pixel_colour[16] =
     { 255, 170,   0 },{ 204, 128,   0 },{ 153,  87,   0 },{ 106,  52,   3 }
 };
 
-__global__ void mandelbrot(Image::pixel_t* image, const int width, const int height, const double scale, const double cx, const double cy)
+__global__ void mandelbrot_kernel(Image::pixel_t* image, const int width, const int height, const double scale, const double cx, const double cy)
 {
-    const int i = threadIdx.x + blockIdx.x * blockDim.x;
-    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int j = threadIdx.x + blockIdx.x * blockDim.x;
+    const int i = threadIdx.y + blockIdx.y * blockDim.y;
 
-    if (i >= width || j >= height)
+    if (i >= height || j >= width)
     {
         return;
     }
 
     const std::uint8_t max_iter = 255;
-    const double y = (i - (width >> 1)) * scale + cy;
-    const double x = (j - (height >> 1)) * scale + cx;
+    const double y = (i - (height >> 1)) * scale + cy;
+    const double x = (j - (width >> 1)) * scale + cx;
 
     double zx, zy, zx2, zy2;
     
@@ -105,9 +105,9 @@ namespace cuda
             if (blockSize < props.warpSize || maxActiveBlocks >= threadBlocks)
             {
                 break;
-            }
+            }          
 
-            blockSize -= props.warpSize;            
+            blockSize -= props.warpSize;
         } 
         while (true);
 
@@ -166,7 +166,7 @@ namespace cuda
         cudaCall(cudaMalloc, (void**)&d_img_data, img_size);
         cudaCall(cudaMemset, d_img_data, 0, img_size);
 
-        float elapsed_time = launch_kernel(mandelbrot, dim3(image.width, image.height), d_img_data, image.width, image.height, scale, cx, cy);
+        float elapsed_time = launch_kernel(mandelbrot_kernel, dim3(image.width, image.height), d_img_data, image.width, image.height, scale, cx, cy);
 
         cudaCall(cudaMemcpy, &image.data[0], d_img_data, img_size, cudaMemcpyDeviceToHost);
 
