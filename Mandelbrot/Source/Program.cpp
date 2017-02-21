@@ -140,30 +140,34 @@ int Program::run()
 std::uint64_t Program::generate_mandelbrot(Image& image, double cx, double cy)
 {
     std::uint8_t iter_max = std::numeric_limits<std::uint8_t>::max();
-    std::int32_t half_width = image.width >> 1;
-    std::int32_t half_height = image.height >> 1;
     double scale = 1.0 / (image.width / 4.0);
-    Image::pixel_t* row = &image.data[0];
+
+    std::vector<Image::pixel_t*> image_rows(image.height);
+    image_rows[0] = &image.data[0];
+    for (std::int32_t i = 1; i < image.height; i++)
+    {
+        image_rows[i] = image_rows[i - 1] + image.width;
+    }
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
     for (std::int32_t i = 0; i < image.height; i++)
     {
-        const double y = (i - half_height) * scale + cy;
+        const double y = (i - image.height / 2) * scale + cy;
 
-        for (std::int32_t j = 0; j < image.width; j++)
+        Image::pixel_t* pixel = image_rows[i];
+
+        for (std::int32_t j = 0; j < image.width; j++, pixel++)
         {
-            const double x = (j - half_width) * scale + cx;
+            const double x = (j - image.width / 2) * scale + cx;
 
             double zx, zy, zx2, zy2;
             std::uint8_t iter = 0;
 
             zx = hypot(x - 0.25, y);
 
-            if (x < zx - 2 * zx * zx + 0.25 || (x + 1)*(x + 1) + y * y < 0.0625)
-            {
-                continue;
-            }
+            if (x < zx - 2 * zx * zx + 0.25) iter = iter_max;
+            if ((x + 1) * (x + 1) + y * y < 0.0625) iter = iter_max;
 
             zx = zy = zx2 = zy2 = 0;
 
@@ -174,15 +178,27 @@ std::uint64_t Program::generate_mandelbrot(Image& image, double cx, double cy)
                 zy2 = zy * zy;
             } while (iter++ < iter_max && zx2 + zy2 < 4);
 
-            if (iter > 0 && iter < iter_max)
-            {
-                const std::uint8_t px_idx = iter % 16;
+            *pixel = { iter };
+        }
+    }
 
-                row[j] = pixel_colour.data[px_idx];
+    for (std::int32_t i = 0; i < image.height; i++)
+    {
+        Image::pixel_t* pixel = image_rows[i];
+
+        for (std::int32_t j = 0; j < image.width; j++, pixel++)
+        {
+            if (pixel->r > 0 && pixel->r < iter_max)
+            {
+                const std::uint8_t px_idx = pixel->r % 16;
+
+                *pixel = pixel_colour.data[px_idx];
+            }
+            else
+            {
+                *pixel = { 0 };
             }
         }
-
-        row += image.width;
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -235,16 +251,13 @@ std::uint64_t Program::generate_mandelbrot_optimised(Image & image, double cx, d
             } while (iter_count++ < iter_max && 
                 _mm_movemask_pd(iter_values = _mm_cmplt_pd(_mm_add_pd(zx2, zy2), _mm_set1_pd(4.0))) != 0);
 
-            double pixel_iters[2];
-            _mm_store_pd(pixel_iters, iters);
-
             for (int k = 0; k < 2; k++)
             {
-                std::uint8_t iter = (int)pixel_iters[k];
+                const std::uint8_t iter = (int)iters.m128d_f64[k];
 
                 if (iter > 0 && iter < iter_max)
                 {
-                    std::uint8_t idx = iter % 16;
+                    const std::uint8_t idx = iter % 16;
 
                     row[j + k] = pixel_colour.data[idx];
                 }
